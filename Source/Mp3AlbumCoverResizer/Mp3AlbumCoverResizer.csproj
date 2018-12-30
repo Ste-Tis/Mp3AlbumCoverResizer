@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>netcoreapp2.1</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ID3.Files-DotNetCore" Version="0.4.0.13" />
+    <PackageReference Include="ID3.Net-DotNetCore" Version="0.4.0.13" />
+    <PackageReference Include="Magick.NET-Q8-AnyCPU" Version="7.9.2" />
+    <PackageReference Include="NDesk.Options" Version="0.2.1" />
+  </ItemGroup>
+
+</Project>
