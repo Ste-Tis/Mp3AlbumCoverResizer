@@ -112,8 +112,8 @@ namespace Mp3AlbumCoverResizer
                 return;
             }
 
-            var resizer = new AlbumCoverResizer(logger);
-            resizer.Resize(path, coverWidth, coverHeight, imageQuality, recursive);
+            var resizer = new AlbumCoverResizer(logger, coverWidth, coverHeight, imageQuality);
+            resizer.Resize(path, recursive);
         }
     }
 }
