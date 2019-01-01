@@ -10,6 +10,8 @@ namespace Mp3AlbumCoverResizer
     /// </summary>
     public class AlbumCoverResizer
     {
+        private int coverImageQuality = 90;
+
         /// <summary>
         ///     Logging
         /// </summary>
@@ -29,14 +31,31 @@ namespace Mp3AlbumCoverResizer
         ///     Compress images while resizing (value: 0 - 100)
         /// </summary>
         public int CoverImageQuality {
-            get { return CoverImageQuality; }
-            set { CoverImageQuality = Math.Min(100, Math.Max(0, value)); }
+            get => coverImageQuality;
+            set => coverImageQuality = Math.Min(100, Math.Max(0, value));
         }
 
         /// <summary>
         ///     Use given pattern to filter files which should be processed
         /// </summary>
         public string FileFilter { get; set; }
+
+        /// <summary>
+        ///     Overwrite all embedded images or add image from file, if none is embedded
+        /// </summary>
+        /// <remarks>
+        ///     If this option is set to true, all embedded images will be removed, if an image with an specific
+        ///     name is in the same folder as the MP3 file (see option OverwriteImageName). This image file will
+        ///     then be used as new album cover for the audio file. If the MP3 file has no images embedded, the 
+        ///     new cover will be added.
+        ///     Use this option to quickly add covers to multiple MP3 files.
+        /// </remarks>
+        public bool OverwriteImageFromFile { get; set; }
+
+        /// <summary>
+        ///     Name of the image file, which should be used for overwriting
+        /// </summary>
+        public string OverwriteImageName { get; set; }
 
         /// <summary>
         ///     Initialize class instance
@@ -46,14 +65,18 @@ namespace Mp3AlbumCoverResizer
         /// <param name="coverHeightPx">New max height of images</param>
         /// <param name="coverImageQuality">Compress images while resizing (value: 0 - 100)</param>
         /// <param name="fileFilter">Use given pattern to filter files which should be processed</param>
+        /// <param name="overwriteImagesFromFile">Overwrite all embedded images or add image from file, if specific image file can be found in same folder</param>
+        /// <param name="overwriteImageName">Name of the image file, which should be used for overwriting</param>
         public AlbumCoverResizer(SimpleConsoleLogger logger, int coverWidthPx = 500, int coverHeightPx = 500, int coverImageQuality = 90,
-            string fileFilter = "*.mp3") {
+            string fileFilter = "*.mp3", bool overwriteImagesFromFile = false, string overwriteImageName = "cover.jpg") {
             Logger = logger;
 
             CoverImageWidthPx = coverWidthPx;
             CoverImageHeightPx = coverHeightPx;
             CoverImageQuality = coverImageQuality;
             FileFilter = fileFilter;
+            OverwriteImageFromFile = overwriteImagesFromFile;
+            OverwriteImageName = overwriteImageName;
         }
 
         /// <summary>
@@ -75,49 +98,119 @@ namespace Mp3AlbumCoverResizer
         }
 
         /// <summary>
-        ///     Process single MP3 file and resize all pictures embedded in the tags
+        ///     Removes all embedded images from MP3 file
+        /// </summary>
+        /// <param name="tag">Tag to remove images from</param>
+        private void RemoveEmbeddedImages(Id3Tag tag)
+        {
+            try
+            {
+                tag.Pictures.Clear();
+            }
+            catch (Exception ex)
+            {
+                Logger?.LogError($"Could not remove images. Error Message: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        ///     Adds a new image to the tags of the given MP3 file
+        /// </summary>
+        /// <param name="tag">Tag to add image too</param>
+        /// <param name="imgPath">Path to image</param>
+        private void AddNewImage(Id3Tag tag, string imgPath)
+    {
+            FileStream imageData = null;
+
+            try
+            {
+                var imageFrame = new Id3.Frames.PictureFrame();
+                imageData = File.Open(imgPath, FileMode.Open);
+                imageFrame.LoadImage(imageData);
+                tag.Pictures.Add(imageFrame);
+            }
+            catch (Exception ex)
+            {
+                Logger?.LogError($"Could not add new image. Error Message: {ex.Message}");
+            }
+            finally
+            {
+                imageData?.Close();
+            }
+        }
+
+        /// <summary>
+        ///     Resize all embedded images of the given file
+        /// </summary>
+        /// <param name="tag">Tag containing images which should be resized</param>
+        private void ResizeEmbeddedImages(Id3Tag tag)
+        {
+            Stream imageStream = null;
+            Stream resizedStream = null;
+
+            try
+            {
+                foreach (var pic in tag.Pictures)
+                {
+                    imageStream = new MemoryStream();
+                    pic.SaveImage(imageStream);
+                    resizedStream = ResizeImage(imageStream);
+                    resizedStream.Seek(0, SeekOrigin.Begin);
+                    pic.LoadImage(resizedStream);
+                    imageStream.Close();
+                    resizedStream.Close();
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger?.LogError($"Could not resize images. Error Message: {ex.Message}");
+            }
+            finally
+            {
+                imageStream?.Close();
+                resizedStream?.Close();
+            }
+        }
+
+        /// <summary>
+        ///     Process single MP3 file and resize all pictures embedded in the tags or overwrite them
         /// </summary>
         /// <param name="filePath">Path to audio file</param>
         private void ProcessFile(string filePath)
         {
             var file = new Mp3File(filePath, Mp3Permissions.ReadWrite);
 
-            if(file.HasTagOfFamily(Id3TagFamily.Version2x))
+            if (file.HasTagOfFamily(Id3TagFamily.Version2x))
             {
-                Stream imageStream = null;
-                Stream resizedStream = null;
-
                 try
                 {
                     var tag = file.GetTag(Id3TagFamily.Version2x);
 
-                    foreach (var pic in tag.Pictures)
+                    if (OverwriteImageFromFile)
                     {
-                        imageStream = new MemoryStream();
-                        pic.SaveImage(imageStream);
-                        resizedStream = ResizeImage(imageStream);
-                        resizedStream.Seek(0, SeekOrigin.Begin);
-                        pic.LoadImage(resizedStream);
-                        imageStream.Close();
-                        resizedStream.Close();
+                        var imgPath = Path.Join(FileHelper.GetDirectoryName(filePath), OverwriteImageName);
+                        if (FileHelper.IsFile(imgPath))
+                        {
+                            RemoveEmbeddedImages(tag);
+                            AddNewImage(tag, imgPath);
+                        }
                     }
+
+                    ResizeEmbeddedImages(tag);
 
                     file.WriteTag(tag, WriteConflictAction.Replace);
                 }
-                catch(Exception ex)
+                catch (Exception ex)
                 {
-                    Logger?.LogError($"Could not process file {filePath}. Error Message: {ex.Message}");
-                }
-                finally
-                {
-                    imageStream?.Close();
-                    resizedStream?.Close();
+                    Logger?.LogError($"Could not modify tag for {filePath}. Error Message: {ex.Message}");
                 }
             }
             else
             {
-                Logger?.LogError("File does not have tags of ID3 Version 2. No cover available.");
+                Logger?.LogError("File does not have tags of ID3 Version 2. Can't remove embedded covers.");
             }
+
+            file.Dispose();
         }
 
         /// <summary>

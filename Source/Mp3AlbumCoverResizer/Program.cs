@@ -1,5 +1,6 @@
 ﻿using Mp3AlbumCoverResizer.Helper;
 using NDesk.Options;
+using System;
 using System.Collections.Generic;
 
 namespace Mp3AlbumCoverResizer
@@ -23,6 +24,7 @@ namespace Mp3AlbumCoverResizer
             bool recursive = false;
             bool showHelp = false;
             string path = null;
+            string overwriteImageName = null;
 
             var cmdOptions = new OptionSet()
             {
@@ -64,6 +66,13 @@ namespace Mp3AlbumCoverResizer
                                 showHelp = true;
                             }
                         }
+                    }
+                },
+                {
+                    "o|overwrite=", "Overwrites or adds an album cover, if an image file with the name VALUE lies in the same folder as the MP3 files. If no such image can be found, the tool resizes the embedded image",
+                    opt =>
+                    {
+                        overwriteImageName = opt;
                     }
                 },
                 {
@@ -112,7 +121,11 @@ namespace Mp3AlbumCoverResizer
                 return;
             }
 
-            var resizer = new AlbumCoverResizer(logger, coverWidth, coverHeight, imageQuality);
+            var resizer = new AlbumCoverResizer(logger, coverWidth, coverHeight, imageQuality)
+            {
+                OverwriteImageFromFile = overwriteImageName != null,
+                OverwriteImageName = overwriteImageName
+            };
             resizer.Resize(path, recursive);
         }
     }

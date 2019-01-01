@@ -27,5 +27,25 @@ namespace Mp3AlbumCoverResizer
             var files = dir.GetFiles(filter, searchOption);
             return new List<FileInfo>(files);
         }
+
+        /// <summary>
+        ///     Returns the absolute path to the directory containing the given file
+        /// </summary>
+        /// <param name="filePath">Path to file</param>
+        /// <returns>Path to directory</returns>
+        public static string GetDirectoryName(string filePath)
+        {
+            return new FileInfo(filePath).Directory.FullName;
+        }
+
+        /// <summary>
+        ///     Checks if the given path leads to an existing file
+        /// </summary>
+        /// <param name="path">Path to file</param>
+        /// <returns>Returns TRUE, if path is valid and leads to existing file, otherwise FALSE</returns>
+        public static bool IsFile(string path)
+        {
+            return File.Exists(path);
+        }
     }
 }
